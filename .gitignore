@@ -1,0 +1,6 @@
+# vim
+*~
+*.swp
+
+# ssh
+authorized_keys
