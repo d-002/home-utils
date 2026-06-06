@@ -1,0 +1,38 @@
+services:
+  git-server:
+    build: git-server
+    container_name: git-server
+    hostname: git-server
+    restart: unless-stopped
+
+    ports:
+      - 127.0.0.1:22:22
+
+    volumes:
+      - ./git-server/repos:/home/git/repos
+    networks:
+      - git-isolated-network
+
+  ssh-bridge:
+    build: ssh-bridge
+    container_name: ssh-bridge
+    hostname: ssh-bridge
+    restart: unless-stopped
+
+    ports:
+      - 127.0.0.1:22:22
+
+    networks:
+      - public
+      - git-isolated-network
+
+networks:
+  public:
+  git-isolated-network:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.3.0.0/24
+          gateway: 172.3.0.254

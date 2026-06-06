@@ -4,3 +4,6 @@
 
 # ssh
 authorized_keys
+
+# internal git repos
+git-server/repos
