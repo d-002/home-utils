@@ -2,8 +2,14 @@
 *~
 *.swp
 
+# python
+__pycache__
+
 # ssh
 authorized_keys
 
 # internal git repos
 git-server/repos
+
+# database
+database.sqlite
