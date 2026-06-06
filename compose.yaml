@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - 127.0.0.1:22:22
+      - 22:22
 
     volumes:
       - ./git-server/repos:/home/git/repos
@@ -20,11 +20,24 @@ services:
     restart: unless-stopped
 
     ports:
-      - 127.0.0.1:22:22
+      - 22:22
 
     networks:
       - public
       - git-isolated-network
+
+  password-mgr:
+    build: password-mgr
+    container_name: password-mgr
+    hostname: password-mgr
+    restart: unless-stopped
+
+    ports:
+      - 8080:8080
+
+    # TODO isolate as well
+    #networks:
+    #  - public
 
 networks:
   public:
