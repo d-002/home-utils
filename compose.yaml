@@ -1,4 +1,6 @@
 services:
+  # Git server
+
   git-server:
     build: git-server
     container_name: git-server
@@ -11,20 +13,22 @@ services:
     volumes:
       - ./git-server/repos:/home/git/repos
     networks:
-      - git-isolated-network
+      - private-git
 
-  ssh-bridge:
-    build: ssh-bridge
-    container_name: ssh-bridge
-    hostname: ssh-bridge
+  bridge-git:
+    build: bridge-git
+    container_name: bridge-git
+    hostname: bridge-git
     restart: unless-stopped
 
     ports:
       - 22:22
 
     networks:
-      - public
-      - git-isolated-network
+      - default
+      - private-git
+
+  # Password manager
 
   password-mgr:
     build: password-mgr
@@ -33,19 +37,38 @@ services:
     restart: unless-stopped
 
     ports:
-      - 8080:8080
+      - 80:80
 
-    # TODO isolate as well
-    #networks:
-    #  - public
+    networks:
+      - private-pwd
+
+  bridge-pwd:
+    build: bridge-pwd
+    container_name: bridge-pwd
+    hostname: bridge-pwd
+    restart: unless-stopped
+
+    ports:
+      - 80:80
+
+    networks:
+      - default
+      - private-pwd
 
 networks:
-  public:
-  git-isolated-network:
+  private-git:
     driver: bridge
     internal: true
     ipam:
       driver: default
       config:
-        - subnet: 172.3.0.0/24
-          gateway: 172.3.0.254
+        - subnet: 172.3.1.0/24
+          gateway: 172.3.1.254
+  private-pwd:
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.3.2.0/24
+          gateway: 172.3.2.254
