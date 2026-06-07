@@ -30,7 +30,8 @@ class DataBase:
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
-            signing_key TEXT
+            signing_key TEXT,
+            password_hash TEXT
         )
         """)
         self.cur.execute("""
@@ -48,7 +49,7 @@ class DataBase:
     def close(self) -> None:
         self.con.close()
 
-    def add_user(self, signing_key: str):
+    def add_user(self, signing_key: str, password_hash: str):
         self.cur.execute(
             """
         SELECT id
@@ -57,16 +58,15 @@ class DataBase:
         """,
             [signing_key],
         )
-        self.con.commit()
         if self.cur.fetchone() is not None:
             raise HTTPException(400, 'user already exists')
 
         self.cur.execute(
             """
-        INSERT INTO users (signing_key)
-        VALUES (?)
+        INSERT INTO users (signing_key, password_hash)
+        VALUES (?, ?)
         """,
-            [signing_key],
+            [signing_key, password_hash],
         )
         self.con.commit()
 
@@ -79,10 +79,18 @@ class DataBase:
         """,
             [signing_key],
         )
-        self.con.commit()
-        if self.cur.fetchone() is None:
+        col = self.cur.fetchone()
+        if col is None:
             raise HTTPException(404, 'user does not exist')
+        user_id: int = col[0]
 
+        # first delete all passwords from this user
+        self.cur.execute("""
+        DELETE FROM passwords
+        WHERE passwords.user_id = ?
+        """, [user_id])
+
+        # then delete the actual user
         self.cur.execute(
             """
         DELETE FROM users
@@ -116,6 +124,18 @@ class DataBase:
             [user_id, website, username, password],
         )
         self.con.commit()
+
+    def get_password_hash(self, signing_key: str) -> dict:
+        self.cur.execute("""
+        SELECT password_hash
+        FROM users
+        WHERE users.signing_key = ?
+        """, [signing_key])
+
+        col = self.cur.fetchone()
+        if col is None:
+            raise HTTPException(404, 'user does not exist')
+        return {'password_hash': col[0]}
 
     def delete_password(
         self, signing_key: str, website: str, username: str, password: str

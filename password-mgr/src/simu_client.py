@@ -2,19 +2,17 @@ import requests
 
 from nacl.signing import VerifyKey
 from auth import (
-    hex2verify,
-    verify2hex,
-    get_signing_key,
+    create_payload,
+    load_signing_key,
     check_payload,
-    SignedPayload,
 )
 
 
-def get_server_pubkey() -> VerifyKey:
+def get_server_pubkey() -> str:
     res = requests.get(api_path + '/pubkey')
     if not res.ok:
         raise ValueError('Could not query server for public key')
-    return hex2verify(res.text)
+    return res.text
 
 
 def wrapper(endpoint, method='get', **kwargs):
@@ -34,62 +32,58 @@ def wrapper(endpoint, method='get', **kwargs):
 
 
 def api_test():
-    body = SignedPayload.create(signing_key, {}, server_pubkey)
-    wrapper('/test', 'post', json=body.model_dump())
+    body = create_payload({}, signing_key, server_key_hex)
+    wrapper('/test', 'post', json=body)
 
 
-def api_useradd():
-    body = SignedPayload.create(
-        signing_key, {'signing_key': pubkey}, server_pubkey
-    )
-    wrapper('/user', 'post', json=body.model_dump())
+def api_useradd(password_hash: str):
+    body = create_payload({'password_hash': password_hash}, signing_key, server_key_hex)
+    wrapper('/user', 'post', json=body)
 
 
 def api_userdel():
-    body = SignedPayload.create(
-        signing_key, {'signing_key': pubkey}, server_pubkey
-    )
-    wrapper('/user', 'delete', json=body.model_dump())
+    body = create_payload({}, signing_key, server_key_hex)
+    wrapper('/user', 'delete', json=body)
+
+
+def api_userhash():
+    body = create_payload({}, signing_key, server_key_hex)
+    wrapper('/user/password-hash', 'post', json=body)
 
 
 def api_passadd(website: str, username: str, password: str):
-    body = SignedPayload.create(
-        signing_key,
+    body = create_payload(
         {'website': website, 'username': username, 'password': password},
-        server_pubkey,
+        signing_key,
+        server_key_hex,
     )
-    wrapper('/password', 'post', json=body.model_dump())
+    wrapper('/password', 'post', json=body)
 
 
 def api_passdel(website, username, password):
-    body = SignedPayload.create(
-        signing_key,
+    body = create_payload(
         {'website': website, 'username': username, 'password': password},
-        server_pubkey,
+        signing_key,
+        server_key_hex,
     )
-    wrapper('/password', 'delete', json=body.model_dump())
+    wrapper('/password', 'delete', json=body)
 
 
 def api_list():
-    body = SignedPayload.create(
-        signing_key, {'signing_key': pubkey}, server_pubkey
-    )
-    wrapper('/passwords', 'post', json=body.model_dump())
+    body = create_payload({}, signing_key, server_key_hex)
+    wrapper('/passwords', 'post', json=body)
 
 
 def api_website(website: str):
-    body = SignedPayload.create(
-        signing_key, {'signing_key': pubkey}, server_pubkey
-    )
-    wrapper(f'/passwords?website={website}', 'post', json=body.model_dump())
+    body = create_payload({}, signing_key, server_key_hex)
+    wrapper(f'/passwords?website={website}', 'post', json=body)
 
 
 if __name__ == '__main__':
     api_path = 'http://localhost:8080'
 
-    signing_key = get_signing_key('client.pem')
-    pubkey = verify2hex(signing_key.verify_key)
-    server_pubkey = get_server_pubkey()
+    signing_key = load_signing_key('client.pem')
+    server_key_hex = get_server_pubkey()
 
     while True:
         command = input('> ').strip().split(' ')
@@ -98,9 +92,11 @@ if __name__ == '__main__':
             case 'test':
                 api_test()
             case 'useradd':
-                api_useradd()
+                api_useradd(*args)
             case 'userdel':
                 api_userdel()
+            case 'hash':
+                api_userhash()
             case 'passadd':
                 api_passadd(*args)
             case 'passdel':
