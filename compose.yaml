@@ -7,8 +7,6 @@ services:
     hostname: git-server
     restart: unless-stopped
 
-    ports:
-      - 22:22
     volumes:
       - ./git-server/repos:/home/git/repos
     networks:
@@ -32,12 +30,10 @@ services:
     build: password-mgr
     container_name: password-mgr
     hostname: password-mgr
-    #restart: unless-stopped
+    restart: unless-stopped
 
     environment:
       - DB_PATH=persistent/database.sqlite
-    ports:
-      - 80:80
     volumes:
       - ./password-mgr/persistent:/home/user/app/persistent
     networks:

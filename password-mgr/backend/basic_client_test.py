@@ -95,7 +95,7 @@ def send_previous_request():
 
 
 if __name__ == '__main__':
-    api_path = 'http://localhost'
+    api_path = 'http://localhost/api'
 
     signing_key = load_signing_key('client.pem')
     server_key_hex = get_server_pubkey()
