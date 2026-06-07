@@ -31,7 +31,8 @@ class DataBase:
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
             signing_key TEXT,
-            password_hash TEXT
+            password_hash TEXT,
+            last_timestamp TIMESTAMP
         )
         """)
         self.cur.execute("""
@@ -59,12 +60,12 @@ class DataBase:
             [signing_key],
         )
         if self.cur.fetchone() is not None:
-            raise HTTPException(400, 'user already exists')
+            raise HTTPException(400, 'User already exists')
 
         self.cur.execute(
             """
-        INSERT INTO users (signing_key, password_hash)
-        VALUES (?, ?)
+        INSERT INTO users (signing_key, password_hash, last_timestamp)
+        VALUES (?, ?, 0)
         """,
             [signing_key, password_hash],
         )
@@ -81,14 +82,17 @@ class DataBase:
         )
         col = self.cur.fetchone()
         if col is None:
-            raise HTTPException(404, 'user does not exist')
+            raise HTTPException(404, 'User does not exist')
         user_id: int = col[0]
 
         # first delete all passwords from this user
-        self.cur.execute("""
+        self.cur.execute(
+            """
         DELETE FROM passwords
         WHERE passwords.user_id = ?
-        """, [user_id])
+        """,
+            [user_id],
+        )
 
         # then delete the actual user
         self.cur.execute(
@@ -97,6 +101,28 @@ class DataBase:
         WHERE users.signing_key = ?
         """,
             [signing_key],
+        )
+        self.con.commit()
+
+    def get_all_timestamps(self) -> dict[str, float]:
+        self.cur.execute("""
+        SELECT signing_key, last_timestamp
+        FROM users
+        """)
+        res = self.cur.fetchall()
+
+        return {
+            signing_key: last_timestamp for signing_key, last_timestamp in res
+        }
+
+    def update_last_timestamp(self, signing_key: str, timestamp: float):
+        self.cur.execute(
+            """
+        UPDATE users
+        SET last_timestamp = ?
+        WHERE users.signing_key = ?
+        """,
+            [timestamp, signing_key],
         )
         self.con.commit()
 
@@ -113,7 +139,7 @@ class DataBase:
         )
         col = self.cur.fetchone()
         if col is None:
-            raise HTTPException(404, 'user does not exist')
+            raise HTTPException(404, 'User does not exist')
         user_id: int = col[0]
 
         self.cur.execute(
@@ -126,15 +152,18 @@ class DataBase:
         self.con.commit()
 
     def get_password_hash(self, signing_key: str) -> dict:
-        self.cur.execute("""
+        self.cur.execute(
+            """
         SELECT password_hash
         FROM users
         WHERE users.signing_key = ?
-        """, [signing_key])
+        """,
+            [signing_key],
+        )
 
         col = self.cur.fetchone()
         if col is None:
-            raise HTTPException(404, 'user does not exist')
+            raise HTTPException(404, 'User does not exist')
         return {'password_hash': col[0]}
 
     def delete_password(
@@ -150,7 +179,7 @@ class DataBase:
         )
         col = self.cur.fetchone()
         if col is None:
-            raise HTTPException(404, 'user does not exist')
+            raise HTTPException(404, 'User does not exist')
         user_id: int = col[0]
 
         self.cur.execute(
@@ -166,7 +195,7 @@ class DataBase:
         self.con.commit()
 
         if self.cur.rowcount == 0:
-            raise HTTPException(404, 'password entry does not exist')
+            raise HTTPException(404, 'Password entry does not exist')
 
     def patch_password(
         self,
@@ -214,7 +243,7 @@ class DataBase:
 
         res = self.cur.fetchall()
         if res is None:
-            raise HTTPException(404, 'passwords not found for user')
+            raise HTTPException(404, 'Passwords not found for user')
 
         return self._res_to_json(res)
 
@@ -237,6 +266,6 @@ class DataBase:
 
         res = self.cur.fetchall()
         if res is None:
-            raise HTTPException(404, 'passwords not found for user and website')
+            raise HTTPException(404, 'Passwords not found for user and website')
 
         return self._res_to_json(res)

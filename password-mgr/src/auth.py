@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
 
+from timestamp import TimestampHandler
 
 from nacl.exceptions import BadSignatureError
 from nacl.public import Box
@@ -24,6 +26,7 @@ def create_payload(
     data: dict, src_signing_key: SigningKey, dst_key_hex: str
 ) -> dict:
     data['signing_key'] = bytes(src_signing_key.verify_key).hex()
+    data['timestamp'] = time.time()
 
     try:
         dst_key = VerifyKey(bytes.fromhex(dst_key_hex))
@@ -43,7 +46,10 @@ def create_payload(
 
 
 def check_payload(
-    body: dict, expected: set[str], dst_signing_key: SigningKey
+    body: dict,
+    expected: set[str],
+    dst_signing_key: SigningKey,
+    timestamp_handler: TimestampHandler,
 ) -> dict:
     # set up encryption
     try:
@@ -65,10 +71,16 @@ def check_payload(
         raise HTTPException(400, detail='Failed to decrypt payload')
 
     # check if all expected values are present
-    for value in expected:
+    for value in expected.union({'signing_key', 'timestamp'}):
         if value not in payload:
             raise HTTPException(
                 400, detail=f'Missing element in payload: {value}'
             )
+
+    # check timestamp
+    timestamp_handler.check_valid_timestamp(
+        body['signing_key'], payload['timestamp']
+    )
+    timestamp_handler.persist_timestamp(body['signing_key'], payload['timestamp'])
 
     return payload

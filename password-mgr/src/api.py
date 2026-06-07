@@ -1,6 +1,7 @@
 import json
 
 from db import DataBase
+from timestamp import DataBaseTimestampHandler
 from auth import (
     create_payload,
     load_signing_key,
@@ -14,18 +15,18 @@ from contextlib import asynccontextmanager
 
 
 def setup_api(db: DataBase) -> FastAPI:
-    signing_key = load_signing_key('server.pem')
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
         db.close()
 
-    app = FastAPI(lifespan=lifespan)
-
     class EncryptedPayload(BaseModel):
         signing_key: str
         ciphertext: str
+
+    signing_key = load_signing_key('server.pem')
+    app = FastAPI(lifespan=lifespan)
+    timestamp_handler = DataBaseTimestampHandler(db)
 
     def success_message(dst_key_hex: str, message='success'):
         return create_payload({'message': message}, signing_key, dst_key_hex)
@@ -36,7 +37,7 @@ def setup_api(db: DataBase) -> FastAPI:
 
     @app.get(
         '/pubkey',
-        summary='Get the server\'s public signing key as bytes',
+        summary="Get the server's public signing key as bytes",
     )
     async def get_pubkey():
         pubkey_hex = bytes(signing_key.verify_key).hex().encode('utf-8')
@@ -44,7 +45,7 @@ def setup_api(db: DataBase) -> FastAPI:
 
     @app.post('/test', summary='Test endpoint with encryption')
     async def test(body: EncryptedPayload):
-        check_payload(body.model_dump(), set(), signing_key)
+        check_payload(body.model_dump(), set(), signing_key, timestamp_handler)
 
         return success_message(body.signing_key, 'Hello world')
 
@@ -58,21 +59,34 @@ def setup_api(db: DataBase) -> FastAPI:
         'whether they inputted the right password and prevent corruption.',
     )
     async def user_new(body: EncryptedPayload):
-        payload = check_payload(body.model_dump(), {'signing_key', 'password_hash'}, signing_key)
+        payload = check_payload(
+            body.model_dump(),
+            {'signing_key', 'password_hash'},
+            signing_key,
+            timestamp_handler,
+        )
 
         db.add_user(body.signing_key, payload['password_hash'])
         return success_message(body.signing_key)
 
     @app.delete('/user', summary='Delete an user')
     async def user_delete(body: EncryptedPayload):
-        check_payload(body.model_dump(), {'signing_key'}, signing_key)
+        check_payload(
+            body.model_dump(), {'signing_key'}, signing_key, timestamp_handler
+        )
 
         db.delete_user(body.signing_key)
         return success_message(body.signing_key)
 
-    @app.post('/user/password-hash', summary='Get the hashed password that was stored when creating this user')
+    @app.post(
+        '/user/password-hash',
+        summary='Get the hashed password that was stored '
+        'when creating this user',
+    )
     async def user_password_hash(body: EncryptedPayload):
-        check_payload(body.model_dump(), {'signing_key'}, signing_key)
+        check_payload(
+            body.model_dump(), {'signing_key'}, signing_key, timestamp_handler
+        )
 
         res = db.get_password_hash(body.signing_key)
         return create_payload(res, signing_key, body.signing_key)
@@ -86,7 +100,10 @@ def setup_api(db: DataBase) -> FastAPI:
     )
     async def password_add(body: EncryptedPayload):
         payload = check_payload(
-            body.model_dump(), {'website', 'username', 'password'}, signing_key
+            body.model_dump(),
+            {'website', 'username', 'password'},
+            signing_key,
+            timestamp_handler,
         )
 
         db.add_password(
@@ -100,7 +117,10 @@ def setup_api(db: DataBase) -> FastAPI:
     @app.delete('/password', summary='Delete a password')
     async def password_delete(body: EncryptedPayload):
         payload = check_payload(
-            body.model_dump(), {'website', 'username', 'password'}, signing_key
+            body.model_dump(),
+            {'website', 'username', 'password'},
+            signing_key,
+            timestamp_handler,
         )
 
         db.delete_password(
@@ -129,6 +149,7 @@ def setup_api(db: DataBase) -> FastAPI:
                 'password_new',
             },
             signing_key,
+            timestamp_handler,
         )
 
         db.patch_password(
@@ -150,7 +171,9 @@ def setup_api(db: DataBase) -> FastAPI:
     async def user_all_passwords(
         body: EncryptedPayload, website: str | None = None
     ):
-        check_payload(body.model_dump(), {'signing_key'}, signing_key)
+        check_payload(
+            body.model_dump(), {'signing_key'}, signing_key, timestamp_handler
+        )
 
         if website is None:
             res = db.all_passwords(body.signing_key)
