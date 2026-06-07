@@ -13,3 +13,6 @@ git-server/repos
 
 # database
 database.sqlite
+
+# private keys
+*.pem
